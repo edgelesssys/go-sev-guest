@@ -736,6 +736,8 @@ func ReportToAbiBytes(r *pb.Report) ([]byte, error) {
 	data[0x1ED] = byte(r.CommittedMinor)
 	data[0x1EE] = byte(r.CommittedMajor)
 	binary.LittleEndian.PutUint64(data[0x1F0:0x1F8], r.LaunchTcb)
+	binary.LittleEndian.PutUint64(data[0x1F8:0x200], r.LaunchMitVector)
+	binary.LittleEndian.PutUint64(data[0x200:0x208], r.CurrentMitVector)
 
 	binary.LittleEndian.PutUint64(data[0x1F8:0x200], r.LaunchMitVector)
 	binary.LittleEndian.PutUint64(data[0x200:0x208], r.CurrentMitVector)

@@ -177,7 +177,10 @@ func TestReportMbz(t *testing.T) {
 			changeValue = tc.changeValue
 		}
 		raw[tc.changeIndex] = changeValue
-		if _, err := ReportToProto(raw); !strings.Contains(err.Error(), tc.wantErr) {
+		_, err = ReportToProto(raw)
+		if err == nil {
+			t.Errorf("%s: ReportToProto(%v) = _, nil. Want error %q", tc.name, reportProto, tc.wantErr)
+		} else if !strings.Contains(err.Error(), tc.wantErr) {
 			t.Errorf("%s: ReportToProto(%v) = _, %v. Want error %v", tc.name, reportProto, err, tc.wantErr)
 		}
 	}
