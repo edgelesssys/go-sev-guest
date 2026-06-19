@@ -82,7 +82,8 @@ var (
 	kdsCspID         = kdsOID{major: 5}
 
 	kdsHostname = "kdsintf.amd.com"
-	kdsBaseURL  = "https://" + kdsHostname
+	// KDSBaseURL is the base URL from which collateral will be fetched.
+	KDSBaseURL  = "https://" + kdsHostname
 	kdsVcekPath = "/vcek/v1/"
 	kdsVlekPath = "/vlek/v1/"
 
@@ -503,7 +504,7 @@ func productBaseURL(s abi.ReportSigner, name string) string {
 	if s == abi.VlekReportSigner {
 		path = kdsVlekPath
 	}
-	return fmt.Sprintf("%s%s%s", kdsBaseURL, path, name)
+	return fmt.Sprintf("%s%s%s", KDSBaseURL, path, name)
 }
 
 // ProductCertChainURL returns the AMD KDS URL for retrieving the ARK and AS(V)K
