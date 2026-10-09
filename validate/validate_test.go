@@ -31,7 +31,6 @@ import (
 	"github.com/google/go-sev-guest/kds"
 	test "github.com/google/go-sev-guest/testing"
 	"github.com/google/go-sev-guest/verify"
-	"go.uber.org/multierr"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	spb "github.com/google/go-sev-guest/proto/sevsnp"
@@ -59,17 +58,17 @@ func TestValidateSnpAttestation(t *testing.T) {
 	reportID := []byte{0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 	reportIDMA := []byte{0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 	chipID := [64]byte{0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06}
-	goodtcb := kds.TCBParts{
+	goodtcb := kds.TCBVersionV0{
 		BlSpl:    0x1f,
 		TeeSpl:   0x7f,
 		SnpSpl:   0x70,
 		UcodeSpl: 0x92,
 	}
 	type testOptions struct {
-		currentTcb     kds.TCBParts
-		reportedTcb    kds.TCBParts
-		committedTcb   kds.TCBParts
-		launchTcb      kds.TCBParts
+		currentTcb     kds.TCBVersionV0
+		reportedTcb    kds.TCBVersionV0
+		committedTcb   kds.TCBVersionV0
+		launchTcb      kds.TCBVersionV0
 		signerInfo     abi.SignerInfo
 		currentBuild   uint8
 		currentMajor   uint8
@@ -79,16 +78,10 @@ func TestValidateSnpAttestation(t *testing.T) {
 		committedMinor uint8
 	}
 	makeReport := func(reportData [64]byte, opts testOptions) [labi.SnpReportRespReportSize]byte {
-		currentTcb, currerr := kds.ComposeTCBParts(opts.currentTcb)
-		reportedTcb, reportederr := kds.ComposeTCBParts(opts.reportedTcb)
-		committedTcb, committederr := kds.ComposeTCBParts(opts.committedTcb)
-		launchTcb, launcherr := kds.ComposeTCBParts(opts.launchTcb)
-		if err := multierr.Combine(currerr,
-			reportederr,
-			committederr,
-			launcherr); err != nil {
-			t.Fatal(err)
-		}
+		currentTcb := opts.currentTcb.Uint64()
+		reportedTcb := opts.reportedTcb.Uint64()
+		committedTcb := opts.committedTcb.Uint64()
+		launchTcb := opts.launchTcb.Uint64()
 		reportpb := &spb.Report{
 			Version:         snpReportVersion,
 			Policy:          debugPolicy,
@@ -142,7 +135,7 @@ func TestValidateSnpAttestation(t *testing.T) {
 		VcekCreationTime: now,
 		VlekCreationTime: now,
 		VcekCustom: test.CertOverride{
-			Extensions: test.CustomExtensions(
+			Extensions: test.CustomExtensionsV0(
 				goodtcb,
 				chipID[:],
 				"",
@@ -150,7 +143,7 @@ func TestValidateSnpAttestation(t *testing.T) {
 			),
 		},
 		VlekCustom: test.CertOverride{
-			Extensions: test.CustomExtensions(
+			Extensions: test.CustomExtensionsV0(
 				goodtcb,
 				nil,
 				"Cloud Service Provider",
@@ -226,10 +219,13 @@ func TestValidateSnpAttestation(t *testing.T) {
 			Input: noncecb1455,
 			Output: func() [labi.SnpReportRespReportSize]byte {
 				opts := baseOpts
-				tcb := goodtcb
-				tcb.BlSpl = 0
-				opts.committedTcb = tcb
-				opts.launchTcb = tcb
+				opts.committedTcb = kds.TCBVersionV0{
+					BlSpl:    0,
+					TeeSpl:   0x7f,
+					SnpSpl:   0x70,
+					UcodeSpl: 0x92,
+				}
+				opts.launchTcb = opts.committedTcb
 				return makeReport(noncecb1455, opts)
 			}(),
 		},
@@ -251,7 +247,7 @@ func TestValidateSnpAttestation(t *testing.T) {
 	getter := test.SimpleGetter(
 		map[string][]byte{
 			"https://kdsintf.amd.com/vcek/v1/Milan/cert_chain": rootBytes,
-			"https://kdsintf.amd.com/vcek/v1/Milan/0a0b0c0d0e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010203040506?blSPL=31&teeSPL=127&snpSPL=112&ucodeSPL=146": sign.Vcek.Raw,
+			"https://kdsintf.amd.com/vcek/v1/Milan/0a0b0c0d0e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010203040506?blSPL=31&snpSPL=112&teeSPL=127&ucodeSPL=146": sign.Vcek.Raw,
 		},
 	)
 	attestationFn := func(nonce [64]byte) *spb.Attestation {
@@ -316,7 +312,7 @@ func TestValidateSnpAttestation(t *testing.T) {
 				ReportIDMA:             reportIDMA,
 				MinimumBuild:           2,
 				MinimumVersion:         uint16((1 << 8) | 49),
-				MinimumTCB:             kds.TCBParts{UcodeSpl: 0x44, SnpSpl: 0x05, BlSpl: 0x02},
+				MinimumTCB:             kds.DecomposeTCBVersionV0(0x02 | (uint64(0x05) << 48) | (uint64(0x44) << 56)),
 				TrustedAuthorKeyHashes: [][]byte{authorKeyDigest},
 			},
 		},
@@ -327,7 +323,7 @@ func TestValidateSnpAttestation(t *testing.T) {
 				ReportData:   nonce12345[:],
 				GuestPolicy:  abi.SnpPolicy{Debug: true, SMT: true},
 				PlatformInfo: &abi.SnpPlatformInfo{SMTEnabled: true},
-				MinimumTCB:   kds.TCBParts{UcodeSpl: 0xff, SnpSpl: 0x05, BlSpl: 0x02},
+				MinimumTCB:   kds.DecomposeTCBVersionV0(0x02 | (uint64(0x05) << 48) | (uint64(0xff) << 56)),
 			},
 			wantErr: "the report's REPORTED_TCB {BlSpl:31 TeeSpl:127 Spl4:0 Spl5:0 Spl6:0 Spl7:0 SnpSpl:112 UcodeSpl:146} is lower than the policy minimum TCB {BlSpl:2 TeeSpl:0 Spl4:0 Spl5:0 Spl6:0 Spl7:0 SnpSpl:5 UcodeSpl:255} in at least one component",
 		},
@@ -477,10 +473,12 @@ func TestValidateSnpAttestation(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		if err := SnpAttestation(tc.attestation, tc.opts); (err == nil && tc.wantErr != "") ||
-			(err != nil && (tc.wantErr == "" || !strings.Contains(err.Error(), tc.wantErr))) {
-			t.Errorf("%s: SnpAttestation(%v) errored unexpectedly. Got '%v', want '%s'", tc.name, tc.attestation, err, tc.wantErr)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			if err := SnpAttestation(tc.attestation, tc.opts); (err == nil && tc.wantErr != "") ||
+				(err != nil && (tc.wantErr == "" || !strings.Contains(err.Error(), tc.wantErr))) {
+				t.Errorf("Got err '%v', want error containing '%s'", err, tc.wantErr)
+			}
+		})
 	}
 }
 

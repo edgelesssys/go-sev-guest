@@ -82,8 +82,7 @@ var (
 	kdsCspID         = kdsOID{major: 5}
 
 	kdsHostname = "kdsintf.amd.com"
-	// KDSBaseURL is the base URL from which collateral will be fetched.
-	KDSBaseURL  = "https://" + kdsHostname
+	kdsBaseURL  = "https://" + kdsHostname
 	kdsVcekPath = "/vcek/v1/"
 	kdsVlekPath = "/vlek/v1/"
 
@@ -117,8 +116,19 @@ var (
 	}
 )
 
-// TCBVersion is a 64-bit bitfield of different security patch levels of AMD firmware and microcode.
-type TCBVersion uint64
+// TCBVersion represents common security patch level accessors across AMD TCB struct versions.
+type TCBVersion interface {
+	// StructVersion returns the AMD TCB structure version.
+	StructVersion() uint8
+	// Uint64 returns the 64-bit wire representation of the TCB.
+	Uint64() uint64
+	// Values encodes the TCB components into KDS REST URL query parameters.
+	Values() url.Values
+	// LE returns true iff all TCB components of this TCB are <= other.
+	LE(other TCBVersion) bool
+	// String returns a human-readable diagnostic representation.
+	String() string
+}
 
 // Extensions represents the information stored in the KDS-specified x509 extensions of a V{C,L}EK
 // certificate.
@@ -192,9 +202,8 @@ func kdsOidMap(cert *x509.Certificate) (map[kdsOID]*pkix.Extension, error) {
 	return result, nil
 }
 
-// TCBParts represents all TCB field values in a given uint64 representation of
-// an AMD secure processor firmware TCB version.
-type TCBParts struct {
+// TCBVersionV0 represents the platform security patch levels for StructVersion 0 (Milan, Genoa, Siena).
+type TCBVersionV0 struct {
 	// BlSpl is the bootloader security patch level.
 	BlSpl uint8
 	// TeeSpl is the TEE security patch level.
@@ -213,62 +222,99 @@ type TCBParts struct {
 	UcodeSpl uint8
 }
 
-// ComposeTCBParts returns an SEV-SNP TCB_VERSION from OID mapping values. The spl4-spl7 fields are
-// reserved, but the KDS specification designates them as 4 byte-sized fields.
-func ComposeTCBParts(parts TCBParts) (TCBVersion, error) {
-	// Only UcodeSpl may be 0-255. All others must be 0-127.
-	check127 := func(name string, value uint8) error {
-		if value > 127 {
-			return fmt.Errorf("%s TCB part is %d. Expect 0-127", name, value)
+// StructVersion returns 0 for Milan, Genoa, and Siena.
+func (t TCBVersionV0) StructVersion() uint8 { return 0 }
+
+// Uint64 returns the 64-bit wire representation of TCBVersionV0.
+func (t TCBVersionV0) Uint64() uint64 {
+	return (uint64(t.UcodeSpl) << 56) |
+		(uint64(t.SnpSpl) << 48) |
+		(uint64(t.Spl7) << 40) |
+		(uint64(t.Spl6) << 32) |
+		(uint64(t.Spl5) << 24) |
+		(uint64(t.Spl4) << 16) |
+		(uint64(t.TeeSpl) << 8) |
+		(uint64(t.BlSpl) << 0)
+}
+
+// Values encodes TCBVersionV0 into KDS REST URL query parameters.
+func (t TCBVersionV0) Values() url.Values {
+	values := make(url.Values)
+	values.Set("blSPL", fmt.Sprintf("%d", t.BlSpl))
+	values.Set("teeSPL", fmt.Sprintf("%d", t.TeeSpl))
+	values.Set("snpSPL", fmt.Sprintf("%d", t.SnpSpl))
+	values.Set("ucodeSPL", fmt.Sprintf("%d", t.UcodeSpl))
+	return values
+}
+
+// LE returns true iff all TCB components of t are <= the corresponding components of other.
+func (t TCBVersionV0) LE(other TCBVersion) bool {
+	o, ok := other.(TCBVersionV0)
+	if !ok {
+		return false
+	}
+	return t.UcodeSpl <= o.UcodeSpl &&
+		t.SnpSpl <= o.SnpSpl &&
+		t.Spl7 <= o.Spl7 &&
+		t.Spl6 <= o.Spl6 &&
+		t.Spl5 <= o.Spl5 &&
+		t.Spl4 <= o.Spl4 &&
+		t.TeeSpl <= o.TeeSpl &&
+		t.BlSpl <= o.BlSpl
+}
+
+func (t TCBVersionV0) String() string {
+	return fmt.Sprintf("{BlSpl:%d TeeSpl:%d Spl4:%d Spl5:%d Spl6:%d Spl7:%d SnpSpl:%d UcodeSpl:%d}",
+		t.BlSpl, t.TeeSpl, t.Spl4, t.Spl5, t.Spl6, t.Spl7, t.SnpSpl, t.UcodeSpl)
+}
+
+// DecomposeTCBVersionV0 decomposes a 64-bit raw TCB integer into a TCBVersionV0.
+func DecomposeTCBVersionV0(raw uint64) TCBVersionV0 {
+	return TCBVersionV0{
+		BlSpl:    uint8(raw & 0xff),
+		TeeSpl:   uint8((raw >> 8) & 0xff),
+		Spl4:     uint8((raw >> 16) & 0xff),
+		Spl5:     uint8((raw >> 24) & 0xff),
+		Spl6:     uint8((raw >> 32) & 0xff),
+		Spl7:     uint8((raw >> 40) & 0xff),
+		SnpSpl:   uint8((raw >> 48) & 0xff),
+		UcodeSpl: uint8((raw >> 56) & 0xff),
+	}
+}
+
+// ParseTCBVersionV0 parses KDS REST query parameters into a TCBVersionV0.
+func ParseTCBVersionV0(values url.Values) (TCBVersionV0, error) {
+	var blSpl, teeSpl, snpSpl, ucodeSpl uint8
+	for key, valuelist := range values {
+		var setter func(number uint8)
+		maxVal := 127
+		switch key {
+		case "blSPL":
+			setter = func(number uint8) { blSpl = number }
+		case "teeSPL":
+			setter = func(number uint8) { teeSpl = number }
+		case "snpSPL":
+			setter = func(number uint8) { snpSpl = number }
+		case "ucodeSPL":
+			maxVal = 255
+			setter = func(number uint8) { ucodeSpl = number }
+		default:
+			return TCBVersionV0{}, fmt.Errorf("unexpected KDS TCB version URL argument %q", key)
 		}
-		return nil
+		for _, val := range valuelist {
+			number, err := strconv.Atoi(val)
+			if err != nil || number < 0 || number > maxVal {
+				return TCBVersionV0{}, fmt.Errorf("invalid KDS TCB version URL argument value %q, want a value 0-%d", val, maxVal)
+			}
+			setter(uint8(number))
+		}
 	}
-	if err := multierr.Combine(check127("SnpSpl", parts.SnpSpl),
-		check127("Spl7", parts.Spl7),
-		check127("Spl6", parts.Spl6),
-		check127("Spl5", parts.Spl5),
-		check127("Spl4", parts.Spl4),
-		check127("TeeSpl", parts.TeeSpl),
-		check127("BlSpl", parts.BlSpl),
-	); err != nil {
-		return TCBVersion(0), err
-	}
-	return TCBVersion(
-		(uint64(parts.UcodeSpl) << 56) |
-			(uint64(parts.SnpSpl) << 48) |
-			(uint64(parts.Spl7) << 40) |
-			(uint64(parts.Spl6) << 32) |
-			(uint64(parts.Spl5) << 24) |
-			(uint64(parts.Spl4) << 16) |
-			(uint64(parts.TeeSpl) << 8) |
-			(uint64(parts.BlSpl) << 0)), nil
-}
-
-// DecomposeTCBVersion interprets the byte components of the AMD representation of the
-// platform security patch levels into a struct.
-func DecomposeTCBVersion(tcb TCBVersion) TCBParts {
-	return TCBParts{
-		UcodeSpl: uint8((uint64(tcb) >> 56) & 0xff),
-		SnpSpl:   uint8((uint64(tcb) >> 48) & 0xff),
-		Spl7:     uint8((uint64(tcb) >> 40) & 0xff),
-		Spl6:     uint8((uint64(tcb) >> 32) & 0xff),
-		Spl5:     uint8((uint64(tcb) >> 24) & 0xff),
-		Spl4:     uint8((uint64(tcb) >> 16) & 0xff),
-		TeeSpl:   uint8((uint64(tcb) >> 8) & 0xff),
-		BlSpl:    uint8((uint64(tcb) >> 0) & 0xff),
-	}
-}
-
-// TCBPartsLE returns true iff all TCB components of tcb0 are <= the corresponding tcb1 components.
-func TCBPartsLE(tcb0, tcb1 TCBParts) bool {
-	return (tcb0.UcodeSpl <= tcb1.UcodeSpl) &&
-		(tcb0.SnpSpl <= tcb1.SnpSpl) &&
-		(tcb0.Spl7 <= tcb1.Spl7) &&
-		(tcb0.Spl6 <= tcb1.Spl6) &&
-		(tcb0.Spl5 <= tcb1.Spl5) &&
-		(tcb0.Spl4 <= tcb1.Spl4) &&
-		(tcb0.TeeSpl <= tcb1.TeeSpl) &&
-		(tcb0.BlSpl <= tcb1.BlSpl)
+	return TCBVersionV0{
+		BlSpl:    blSpl,
+		TeeSpl:   teeSpl,
+		SnpSpl:   snpSpl,
+		UcodeSpl: ucodeSpl,
+	}, nil
 }
 
 func asn1U8(ext *pkix.Extension, field string, out *uint8) error {
@@ -385,20 +431,16 @@ func kdsOidMapToExtensions(exts map[kdsOID]*pkix.Extension) (*Extensions, error)
 	if err := asn1U8(exts[kdsUcodeSpl], "UcodeSpl", &ucodespl); err != nil {
 		return nil, err
 	}
-	tcb, err := ComposeTCBParts(TCBParts{
+	result.TCBVersion = TCBVersionV0{
 		BlSpl:    blspl,
-		SnpSpl:   snpspl,
 		TeeSpl:   teespl,
 		Spl4:     spl4,
 		Spl5:     spl5,
 		Spl6:     spl6,
 		Spl7:     spl7,
+		SnpSpl:   snpspl,
 		UcodeSpl: ucodespl,
-	})
-	if err != nil {
-		return nil, err
 	}
-	result.TCBVersion = tcb
 	return &result, nil
 }
 
@@ -504,7 +546,7 @@ func productBaseURL(s abi.ReportSigner, name string) string {
 	if s == abi.VlekReportSigner {
 		path = kdsVlekPath
 	}
-	return fmt.Sprintf("%s%s%s", KDSBaseURL, path, name)
+	return fmt.Sprintf("%s%s%s", kdsBaseURL, path, name)
 }
 
 // ProductCertChainURL returns the AMD KDS URL for retrieving the ARK and AS(V)K
@@ -516,27 +558,19 @@ func ProductCertChainURL(s abi.ReportSigner, productLine string) string {
 // VCEKCertURL returns the AMD KDS URL for retrieving the VCEK on a given product
 // at a given TCB version. The hwid is the CHIP_ID field in an attestation report.
 func VCEKCertURL(productLine string, hwid []byte, tcb TCBVersion) string {
-	parts := DecomposeTCBVersion(tcb)
-	return fmt.Sprintf("%s/%s?blSPL=%d&teeSPL=%d&snpSPL=%d&ucodeSPL=%d",
+	return fmt.Sprintf("%s/%s?%s",
 		productBaseURL(abi.VcekReportSigner, productLine),
 		hex.EncodeToString(hwid),
-		parts.BlSpl,
-		parts.TeeSpl,
-		parts.SnpSpl,
-		parts.UcodeSpl,
+		tcb.Values().Encode(),
 	)
 }
 
 // VLEKCertURL returns the GET URL for retrieving a VLEK certificate, but without the necessary
 // CSP secret in the HTTP headers that makes the request validate to the KDS.
 func VLEKCertURL(productLine string, tcb TCBVersion) string {
-	parts := DecomposeTCBVersion(tcb)
-	return fmt.Sprintf("%s/cert?blSPL=%d&teeSPL=%d&snpSPL=%d&ucodeSPL=%d",
+	return fmt.Sprintf("%s/cert?%s",
 		productBaseURL(abi.VlekReportSigner, productLine),
-		parts.BlSpl,
-		parts.TeeSpl,
-		parts.SnpSpl,
-		parts.UcodeSpl,
+		tcb.Values().Encode(),
 	)
 }
 
@@ -549,7 +583,7 @@ type VCEKCert struct {
 	Product     string
 	ProductLine string
 	HWID        []byte
-	TCB         uint64
+	TCB         TCBVersion
 }
 
 // VCEKCertProduct returns a VCEKCert with the product line set to productLine.
@@ -568,7 +602,7 @@ type VLEKCert struct {
 	// Deprecated: Use ProductLine.
 	Product     string
 	ProductLine string
-	TCB         uint64
+	TCB         TCBVersion
 }
 
 // CertFunction is an enumeration of which endorsement key type is getting certified.
@@ -642,39 +676,12 @@ func ParseProductCertChainURL(kdsurl string) (string, CertFunction, error) {
 	return parsed.productLine, parsed.function, nil
 }
 
-func parseTCBURL(u *url.URL) (uint64, error) {
+func parseTCBURL(u *url.URL) (TCBVersionV0, error) {
 	values, err := url.ParseQuery(u.RawQuery)
 	if err != nil {
-		return 0, fmt.Errorf("invalid AMD KDS URL query %q: %v", u.RawQuery, err)
+		return TCBVersionV0{}, fmt.Errorf("invalid AMD KDS URL query %q: %v", u.RawQuery, err)
 	}
-	parts := TCBParts{}
-	for key, valuelist := range values {
-		var setter func(number uint8)
-		switch key {
-		case "blSPL":
-			setter = func(number uint8) { parts.BlSpl = number }
-		case "teeSPL":
-			setter = func(number uint8) { parts.TeeSpl = number }
-		case "snpSPL":
-			setter = func(number uint8) { parts.SnpSpl = number }
-		case "ucodeSPL":
-			setter = func(number uint8) { parts.UcodeSpl = number }
-		default:
-			return 0, fmt.Errorf("unexpected KDS TCB version URL argument %q", key)
-		}
-		for _, val := range valuelist {
-			number, err := strconv.Atoi(val)
-			if err != nil || number < 0 || number > 255 {
-				return 0, fmt.Errorf("invalid KDS TCB version URL argument value %q, want a value 0-255", val)
-			}
-			setter(uint8(number))
-		}
-	}
-	tcb, err := ComposeTCBParts(parts)
-	if err != nil {
-		return 0, fmt.Errorf("invalid AMD KDS TCB arguments: %v", err)
-	}
-	return uint64(tcb), err
+	return ParseTCBVersionV0(values)
 }
 
 // ParseVCEKCertURL returns the attestation report components represented in the given KDS VCEK

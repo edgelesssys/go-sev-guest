@@ -122,9 +122,9 @@ func asBin(report *spb.Attestation) ([]byte, error) {
 }
 
 func tcbBreakdown(tcb uint64) string {
-	parts := kds.DecomposeTCBVersion(kds.TCBVersion(tcb))
-	return fmt.Sprintf("0x%x:{ucode: %d, snp: %d, tee: %d, bl: %d}", tcb, parts.UcodeSpl, parts.SnpSpl,
-		parts.TeeSpl, parts.BlSpl)
+	v0 := kds.DecomposeTCBVersionV0(tcb)
+	return fmt.Sprintf("0x%x:{ucode: %d, snp: %d, tee: %d, bl: %d}", tcb, v0.UcodeSpl, v0.SnpSpl,
+		v0.TeeSpl, v0.BlSpl)
 }
 
 func tcbText(report *spb.Attestation) ([]byte, error) {

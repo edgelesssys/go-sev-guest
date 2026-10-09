@@ -386,9 +386,9 @@ func (b *AmdSignerBuilder) certifyAsvk() error {
 	return err
 }
 
-// CustomExtensions returns an array of extensions following the KDS specification
+// CustomExtensionsV0 returns an array of StructVersion 0 extensions following the KDS specification
 // for the given values.
-func CustomExtensions(tcb kds.TCBParts, hwid []byte, cspid, productName string) []pkix.Extension {
+func CustomExtensionsV0(tcb kds.TCBVersionV0, hwid []byte, cspid, productName string) []pkix.Extension {
 	var productNameAsn1 []byte
 	asn1Zero, _ := asn1.Marshal(0)
 	if hwid != nil {
@@ -447,7 +447,7 @@ func (b *AmdSignerBuilder) endorsementKeyPrecert(creationTime time.Time, hwid []
 		SerialNumber:       serialNumber,
 		NotBefore:          time.Time{},
 		NotAfter:           creationTime.Add(vcekExpirationYears * 365 * 24 * time.Hour),
-		ExtraExtensions:    CustomExtensions(kds.TCBParts{}, hwid, b.CSPID, b.productName()),
+		ExtraExtensions:    CustomExtensionsV0(kds.TCBVersionV0{}, hwid, b.CSPID, b.productName()),
 	}
 }
 

@@ -116,11 +116,15 @@ func FakeKDSFromFile(path string) (*FakeKDS, error) {
 func FakeKDSFromSigner(signer *AmdSigner) (*FakeKDS, error) {
 	certs := &kpb.Certificates{}
 	rootBundles := map[string]*RootBundle{}
+	tcbVal := uint64(0)
+	if signer.TCB != nil {
+		tcbVal = signer.TCB.Uint64()
+	}
 	certs.ChipCerts = []*kpb.Certificates_ChipTCBCerts{
 		{
 			ChipId: signer.HWID[:],
 			TcbCerts: map[uint64][]byte{
-				uint64(signer.TCB): signer.Vcek.Raw,
+				tcbVal: signer.Vcek.Raw,
 			},
 			Fms: abi.MaskedCpuid1EaxFromSevProduct(signer.Product),
 		},
@@ -187,7 +191,7 @@ func (f *FakeKDS) Get(url string) ([]byte, error) {
 	if certs == nil {
 		return nil, fmt.Errorf("no certificate found at %q (unknown HWID %v)", url, vcek.HWID)
 	}
-	certbytes, ok := certs[vcek.TCB]
+	certbytes, ok := certs[vcek.TCB.Uint64()]
 	if !ok {
 		return nil, fmt.Errorf("no certificate found at %q (host present, bad TCB %v)", url, vcek.TCB)
 	}

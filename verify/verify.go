@@ -272,12 +272,8 @@ func GetCrlAndCheckRootContext(ctx context.Context, r *trust.AMDRootCerts, opts 
 	if getter == nil {
 		getter = trust.DefaultHTTPSGetter()
 	}
-	now := opts.Now
-	if now.IsZero() {
-		now = time.Now()
-	}
-	if r.CRL != nil && now.Before(r.CRL.NextUpdate) {
-		if err := verifyCRL(r, now); err != nil {
+	if r.CRL != nil && opts.Now.Before(r.CRL.NextUpdate) {
+		if err := verifyCRL(r); err != nil {
 			return nil, err
 		}
 		return r.CRL, nil
@@ -295,7 +291,7 @@ func GetCrlAndCheckRootContext(ctx context.Context, r *trust.AMDRootCerts, opts 
 			continue
 		}
 		r.CRL = crl
-		if err := verifyCRL(r, now); err != nil {
+		if err := verifyCRL(r); err != nil {
 			return nil, err
 		}
 		return r.CRL, nil
@@ -303,10 +299,9 @@ func GetCrlAndCheckRootContext(ctx context.Context, r *trust.AMDRootCerts, opts 
 	return nil, CRLUnavailableErr{multierr.Append(errs, errors.New("could not fetch product CRL"))}
 }
 
-// verifyCRL checks that the VCEK CRL is signed by the ARK and that it is currently within its
-// validity window (thisUpdate <= now < nextUpdate). Must be called after r.CRL is set and while
+// verifyCRL checks that the VCEK CRL is signed by the ARK. Must be called after r.CRL is set and while
 // r.Mu is held.
-func verifyCRL(r *trust.AMDRootCerts, now time.Time) error {
+func verifyCRL(r *trust.AMDRootCerts) error {
 	if r.CRL == nil {
 		return errors.New("internal error: CRL not set")
 	}
@@ -318,12 +313,6 @@ func verifyCRL(r *trust.AMDRootCerts, now time.Time) error {
 	}
 	if err := r.CRL.CheckSignatureFrom(r.ProductCerts.Ark); err != nil {
 		return fmt.Errorf("CRL is not signed by ARK: %v", err)
-	}
-	if now.Before(r.CRL.ThisUpdate) {
-		return fmt.Errorf("CRL is not yet valid: thisUpdate is %v, now is %v", r.CRL.ThisUpdate, now)
-	}
-	if !now.Before(r.CRL.NextUpdate) {
-		return fmt.Errorf("CRL is expired: nextUpdate is %v, now is %v", r.CRL.NextUpdate, now)
 	}
 	for _, bad := range r.CRL.RevokedCertificates {
 		if r.ProductCerts.Ask.SerialNumber.Cmp(bad.SerialNumber) == 0 {
@@ -558,8 +547,8 @@ type Options struct {
 	// CheckRevocations set to true if the verifier should retrieve the CRL from the network and check
 	// if the VCEK or ASK have been revoked according to the ARK.
 	CheckRevocations bool
-	// DisableCertFetching set to true if SnpAttestation should not connect to the AMD KDS to fill in
-	// any missing certificates in an attestation's certificate chain. Uses Getter if false.
+	// DisableCertFetching prevents fetching missing certificates from AMD KDS. Verification only
+	// fetches the endorsement certificate; GetAttestationFromReport also fetches the root chain.
 	DisableCertFetching bool
 	// Getter takes a URL and returns the body of its contents. By default uses http.Get and returns
 	// the body. If Getter implements trust.ContextHTTPSGetter, GetContext will be preferred over Get.
@@ -652,6 +641,7 @@ func updateProductExpectation(product **spb.SevProduct, reportProduct *spb.SevPr
 
 // SnpAttestation verifies the protobuf representation of an attestation report's signature based
 // on the report's SignatureAlgo, provided the certificate chain is valid.
+// Missing ASK and ARK certificates are not added to the attestation.
 func SnpAttestation(attestation *spb.Attestation, options *Options) error {
 	return SnpAttestationContext(context.TODO(), attestation, options)
 }
@@ -664,9 +654,8 @@ func SnpAttestationContext(ctx context.Context, attestation *spb.Attestation, op
 	if attestation == nil {
 		return fmt.Errorf("attestation cannot be nil")
 	}
-	// Make sure we have the whole certificate chain, or at least the product
-	// info.
-	if err := fillInAttestation(ctx, attestation, options); err != nil {
+	// Verification uses configured or embedded roots, not the report's root chain.
+	if err := fillInAttestation(ctx, attestation, options, false); err != nil {
 		return err
 	}
 
@@ -780,9 +769,8 @@ func cpuidWorkaround(attestation *spb.Attestation, options *Options) (string, fu
 	return kds.ProductLine(product), productUpdate, updateExpectation, nil
 }
 
-// fillInAttestation uses AMD's KDS to populate any empty certificate field in the attestation's
-// certificate chain.
-func fillInAttestation(ctx context.Context, attestation *spb.Attestation, options *Options) error {
+// fillInAttestation fetches missing endorsement certificates and, if requested, the root chain.
+func fillInAttestation(ctx context.Context, attestation *spb.Attestation, options *Options, fetchChain bool) error {
 	if options.DisableCertFetching {
 		return nil
 	}
@@ -805,7 +793,7 @@ func fillInAttestation(ctx context.Context, attestation *spb.Attestation, option
 		chain = &spb.CertificateChain{}
 		attestation.CertificateChain = chain
 	}
-	if len(chain.GetAskCert()) == 0 || len(chain.GetArkCert()) == 0 {
+	if fetchChain && (len(chain.GetAskCert()) == 0 || len(chain.GetArkCert()) == 0) {
 		askark, err := trust.GetProductChainContext(ctx, productLine, info.SigningKey, getter)
 		if err != nil {
 			return err
@@ -821,7 +809,7 @@ func fillInAttestation(ctx context.Context, attestation *spb.Attestation, option
 	switch info.SigningKey {
 	case abi.VcekReportSigner:
 		if len(chain.GetVcekCert()) == 0 {
-			vcekURL := kds.VCEKCertURL(productLine, report.GetChipId(), kds.TCBVersion(report.GetReportedTcb()))
+			vcekURL := kds.VCEKCertURL(productLine, report.GetChipId(), kds.DecomposeTCBVersionV0(report.GetReportedTcb()))
 			vcek, err := trust.GetWith(ctx, getter, vcekURL)
 			if err != nil {
 				return &trust.AttestationRecreationErr{
@@ -860,7 +848,7 @@ func GetAttestationFromReportContext(ctx context.Context, report *spb.Report, op
 		Report:           report,
 		CertificateChain: &spb.CertificateChain{Extras: map[string][]byte{}},
 	}
-	if err := fillInAttestation(ctx, result, options); err != nil {
+	if err := fillInAttestation(ctx, result, options, true); err != nil {
 		return nil, err
 	}
 	// Attempt to fill in the product field of the attestation. Don't error at this
