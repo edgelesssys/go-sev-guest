@@ -230,4 +230,13 @@ func TestTransform(t *testing.T) {
 			t.Fatalf("Transform(_, \"textproto\") = %v, nil. Expect %v.", string(textout), string(input.textcerts))
 		}
 	})
+	t.Run("tcb", func(t *testing.T) {
+		tcbout, err := Transform(input.attestation, "tcb")
+		if err != nil {
+			t.Fatalf("Transform(_, \"tcb\") = _, %v. Expect nil.", err)
+		}
+		if len(tcbout) == 0 {
+			t.Fatalf("Transform(_, \"tcb\") returned empty output")
+		}
+	})
 }
