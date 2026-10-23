@@ -23,18 +23,18 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/edgelesssys/go-sev-guest/abi"
+	labi "github.com/edgelesssys/go-sev-guest/client/linuxabi"
+	spb "github.com/edgelesssys/go-sev-guest/proto/sevsnp"
 	"github.com/google/go-configfs-tsm/configfs/linuxtsm"
 	"github.com/google/go-configfs-tsm/report"
-	"github.com/google/go-sev-guest/abi"
-	labi "github.com/google/go-sev-guest/client/linuxabi"
-	spb "github.com/google/go-sev-guest/proto/sevsnp"
 	"golang.org/x/sys/unix"
 )
 
 const (
 	// defaultSevGuestDevicePath is the platform's usual device path to the SEV guest.
 	defaultSevGuestDevicePath = "/dev/sev-guest"
-	installURL                = "https://github.com/google/go-sev-guest/blob/main/INSTALL.md"
+	installURL                = "https://github.com/edgelesssys/go-sev-guest/blob/main/INSTALL.md"
 )
 
 // These flags should not be needed for long term health of the project as the Linux kernel

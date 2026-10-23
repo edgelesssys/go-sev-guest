@@ -1,4 +1,4 @@
-module github.com/google/go-sev-guest
+module github.com/edgelesssys/go-sev-guest
 
 go 1.19
 

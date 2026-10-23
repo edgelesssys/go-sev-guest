@@ -25,15 +25,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-sev-guest/abi"
-	sg "github.com/google/go-sev-guest/client"
-	labi "github.com/google/go-sev-guest/client/linuxabi"
-	"github.com/google/go-sev-guest/kds"
-	test "github.com/google/go-sev-guest/testing"
-	"github.com/google/go-sev-guest/verify"
+	"github.com/edgelesssys/go-sev-guest/abi"
+	sg "github.com/edgelesssys/go-sev-guest/client"
+	labi "github.com/edgelesssys/go-sev-guest/client/linuxabi"
+	"github.com/edgelesssys/go-sev-guest/kds"
+	test "github.com/edgelesssys/go-sev-guest/testing"
+	"github.com/edgelesssys/go-sev-guest/verify"
 	"google.golang.org/protobuf/encoding/prototext"
 
-	spb "github.com/google/go-sev-guest/proto/sevsnp"
+	spb "github.com/edgelesssys/go-sev-guest/proto/sevsnp"
 )
 
 const (

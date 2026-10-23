@@ -19,7 +19,7 @@ package client
 import (
 	"fmt"
 
-	spb "github.com/google/go-sev-guest/proto/sevsnp"
+	spb "github.com/edgelesssys/go-sev-guest/proto/sevsnp"
 )
 
 // WindowsDevice implements the Device interface with Linux ioctls.

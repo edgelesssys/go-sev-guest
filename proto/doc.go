@@ -46,6 +46,6 @@
 // include subdirectory.
 package proto
 
-//go:generate protoc -I$PROTOC_INSTALL_DIR/include -I=. --go_out=. --go_opt=module=github.com/google/go-sev-guest/proto check.proto
-//go:generate protoc --go_out=. --go_opt=module=github.com/google/go-sev-guest/proto fakekds.proto
-//go:generate protoc --go_out=. --go_opt=module=github.com/google/go-sev-guest/proto sevsnp.proto
+//go:generate protoc -I$PROTOC_INSTALL_DIR/include -I=. --go_out=. --go_opt=module=github.com/edgelesssys/go-sev-guest/proto check.proto
+//go:generate protoc --go_out=. --go_opt=module=github.com/edgelesssys/go-sev-guest/proto fakekds.proto
+//go:generate protoc --go_out=. --go_opt=module=github.com/edgelesssys/go-sev-guest/proto sevsnp.proto

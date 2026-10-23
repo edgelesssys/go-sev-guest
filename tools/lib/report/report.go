@@ -20,13 +20,13 @@ import (
 	"io"
 	"os"
 
-	"github.com/google/go-sev-guest/abi"
-	"github.com/google/go-sev-guest/kds"
+	"github.com/edgelesssys/go-sev-guest/abi"
+	"github.com/edgelesssys/go-sev-guest/kds"
 	"go.uber.org/multierr"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
-	spb "github.com/google/go-sev-guest/proto/sevsnp"
+	spb "github.com/edgelesssys/go-sev-guest/proto/sevsnp"
 )
 
 func parseAttestationBytes(b []byte) (*spb.Attestation, error) {

@@ -26,8 +26,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/go-sev-guest/abi"
-	pb "github.com/google/go-sev-guest/proto/sevsnp"
+	"github.com/edgelesssys/go-sev-guest/abi"
+	pb "github.com/edgelesssys/go-sev-guest/proto/sevsnp"
 	"go.uber.org/multierr"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
