@@ -19,7 +19,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/google/go-sev-guest/tools/lib/report"
+	"github.com/edgelesssys/go-sev-guest/tools/lib/report"
 	"github.com/google/logger"
 )
 

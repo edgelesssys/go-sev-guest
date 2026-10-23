@@ -16,7 +16,7 @@ syntax = "proto3";
 
 package fakekds;
 
-option go_package = "github.com/google/go-sev-guest/proto/fakekds";
+option go_package = "github.com/edgelesssys/go-sev-guest/proto/fakekds";
 
 // Certificates represents all known certificates for machines at particular
 // TCB values. This is useful to represent a test machine cluster's VCEK

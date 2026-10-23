@@ -20,7 +20,7 @@ package check;
 import "google/protobuf/wrappers.proto";
 import "sevsnp.proto";
 
-option go_package = "github.com/google/go-sev-guest/proto/check";
+option go_package = "github.com/edgelesssys/go-sev-guest/proto/check";
 
 // Policy is a representation of an attestation report validation policy.
 // Each field corresponds to a field on validate.Options. This format

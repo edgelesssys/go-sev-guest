@@ -25,9 +25,9 @@ import (
 	"strings"
 	"testing"
 
+	spb "github.com/edgelesssys/go-sev-guest/proto/sevsnp"
+	"github.com/edgelesssys/go-sev-guest/verify/testdata"
 	"github.com/google/go-cmp/cmp"
-	spb "github.com/google/go-sev-guest/proto/sevsnp"
-	"github.com/google/go-sev-guest/verify/testdata"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/testing/protocmp"

@@ -22,11 +22,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/edgelesssys/go-sev-guest/abi"
+	pb "github.com/edgelesssys/go-sev-guest/proto/sevsnp"
+	"github.com/edgelesssys/go-sev-guest/verify/testdata"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/google/go-sev-guest/abi"
-	pb "github.com/google/go-sev-guest/proto/sevsnp"
-	"github.com/google/go-sev-guest/verify/testdata"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )

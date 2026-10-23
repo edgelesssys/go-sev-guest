@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"math/big"
 
-	pb "github.com/google/go-sev-guest/proto/sevsnp"
+	pb "github.com/edgelesssys/go-sev-guest/proto/sevsnp"
 	"github.com/google/logger"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/cryptobyte"

@@ -20,7 +20,7 @@ import "google/protobuf/wrappers.proto";
 // chain.
 package sevsnp;
 
-option go_package = "github.com/google/go-sev-guest/proto/sevsnp";
+option go_package = "github.com/edgelesssys/go-sev-guest/proto/sevsnp";
 
 // Report represents an SEV-SNP ATTESTATION_REPORT, specified in SEV SNP API
 //  documentation https://www.amd.com/system/files/TechDocs/56860.pdf
